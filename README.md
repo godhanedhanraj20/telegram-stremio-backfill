@@ -23,7 +23,7 @@ The notebook uses:
 4. Scans one or more Telegram channels.
 5. Collects media messages and parses captions.
 6. Optionally writes to MongoDB Atlas (or dry-run in `SAFE_MODE`).
-7. Avoids duplicates using unique key (`channel + message_id`).
+7. Avoids duplicates using unique key (`chat_id + message_id`).
 8. Writes output incrementally as JSON Lines to avoid memory growth.
 9. Prints periodic and final progress per channel.
 
@@ -94,10 +94,12 @@ CHANNELS = [
 ]
 SAFE_MODE = False
 START_FROM_MESSAGE_ID = None
+THROTTLE_DELAY = 0.05
 ```
 
 - `SAFE_MODE=True`: dry-run mode, no MongoDB writes.
-- `START_FROM_MESSAGE_ID=12345`: resume mode. Messages with lower IDs are skipped.
+- `START_FROM_MESSAGE_ID=12345`: resume mode. When lower IDs are reached, the channel scan stops immediately.
+- `THROTTLE_DELAY=0.05`: passive delay after each processed message to reduce API pressure.
 
 ### 6) Run scan cell
 
@@ -113,6 +115,7 @@ The notebook will:
   - season/episode (`S01E02`)
 - Upsert into MongoDB Atlas (unless `SAFE_MODE=True`)
 - Print progress every 1000 processed messages
+- Stop channel scan when resume boundary is reached
 - Print per-channel totals at the end
 
 ### 7) Review output
@@ -128,7 +131,7 @@ After completion:
 
 The notebook creates a unique index on:
 
-- `channel`
+- `chat_id`
 - `message_id`
 
 Writes use `update_one(..., upsert=True)`, so reruns are idempotent.
@@ -137,7 +140,7 @@ Writes use `update_one(..., upsert=True)`, so reruns are idempotent.
 
 ## Resume mode details (`START_FROM_MESSAGE_ID`)
 
-Telegram history is scanned from newest to oldest. When `START_FROM_MESSAGE_ID` is set, older messages are skipped. This lets you continue large backfills from a known message boundary.
+Telegram history is scanned from newest to oldest. When `START_FROM_MESSAGE_ID` is set and a lower message ID is reached, the channel scan stops immediately at the resume boundary. This lets you continue large backfills from a known message boundary.
 
 Example:
 - First run scans everything and reaches message ID 45000.
